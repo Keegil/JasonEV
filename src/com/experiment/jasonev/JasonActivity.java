@@ -5,37 +5,31 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import android.app.Activity;
+import android.app.ProgressDialog;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Message;
 import android.view.Menu;
 import android.widget.TextView;
 
 public class JasonActivity extends Activity {
 
-	private static String filename = "drive1.txt";
+	private static String filename = "gpslog20.txt";
 
-	TextView tvSpeed;
-	TextView tvAcc;
-	TextView tvThrottle;
-	TextView tvLoc;
-	TextView tvIgn;
+	static TextView tvTimeStamp;
+	static TextView tvPosition;
+	static TextView tvAcc;
+	static TextView tvSpeed;
 
 	// JSON Node names
-	private static final String TAG_SPEED = "speed";
-	private static final String TAG_ACCELERATION = "acceleration";
-	private static final String TAG_THROTTLE = "throttle";
-	private static final String TAG_IGNITION = "ignition";
+	private static final String TAG_DRIVE_DATA = "driveData";
 	private static final String TAG_TIME = "time";
-	private static final String TAG_POSITION = "position";
-	private static final String TAG_GPS = "gps";
-	private static final String TAG_VALUE = "value";
-	private static final String TAG_DISTANCE = "distance";
+	private static final String TAG_GPS_DATA = "gpsData";
+	private static final String TAG_ACCEL_DATA = "accelData";
+	private static final String TAG_SPEED_DATA = "speedData";
 
 	// contacts JSONArray
-	JSONArray speed = null;
-	JSONArray acceleration = null;
-	JSONArray throttle = null;
-	JSONArray ignition = null;
-	JSONArray gps = null;
+	JSONArray driveData = null;
 
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
@@ -45,12 +39,43 @@ public class JasonActivity extends Activity {
 		getJSON();
 	}
 
+	static Handler timeHandler = new Handler() {
+		@Override
+		public void handleMessage(Message timeMsg) {
+			String text = (String) timeMsg.obj;
+			tvTimeStamp.append(text + "\n");
+		}
+	};
+
+	static Handler gpsHandler = new Handler() {
+		@Override
+		public void handleMessage(Message gpsMsg) {
+			String text = (String) gpsMsg.obj;
+			tvPosition.append(text + "\n");
+		}
+	};
+
+	static Handler accHandler = new Handler() {
+		@Override
+		public void handleMessage(Message accMsg) {
+			String text = (String) accMsg.obj;
+			tvAcc.append(text + "\n");
+		}
+	};
+
+	static Handler speedHandler = new Handler() {
+		@Override
+		public void handleMessage(Message speedMsg) {
+			String text = (String) speedMsg.obj;
+			tvSpeed.append(text + "\n");
+		}
+	};
+
 	public void init() {
-		tvSpeed = (TextView) findViewById(R.id.tv_speed);
+		tvTimeStamp = (TextView) findViewById(R.id.tv_timestamp);
+		tvPosition = (TextView) findViewById(R.id.tv_position);
 		tvAcc = (TextView) findViewById(R.id.tv_acc);
-		tvThrottle = (TextView) findViewById(R.id.tv_throttle);
-		tvLoc = (TextView) findViewById(R.id.tv_loc);
-		tvIgn = (TextView) findViewById(R.id.tv_ign);
+		tvSpeed = (TextView) findViewById(R.id.tv_speed);
 	}
 
 	@Override
@@ -62,112 +87,51 @@ public class JasonActivity extends Activity {
 
 	public void getJSON() {
 		JSONParser jParser = new JSONParser();
-		JSONObject json = jParser.getJSONFromAsset(this, filename);
-
+		final JSONObject json = jParser.getJSONFromAsset(this, filename);
 		try {
-			speed = json.getJSONArray(TAG_SPEED);
-
-			for (int i = 0; i < speed.length(); i++) {
-				JSONObject c = speed.getJSONObject(i);
-
-				String time = c.getString(TAG_TIME);
-				String position = c.getString(TAG_POSITION);
-				String value = c.getString(TAG_VALUE);
-
-				if (i == 0) {
-					tvSpeed.setText(time + " | " + position + " | " + value);
-				} else {
-					tvSpeed.setText(tvSpeed.getText() + "\n" + time + " | "
-							+ position + " | " + value);
-				}
-			}
+			driveData = json.getJSONArray(TAG_DRIVE_DATA);
 		} catch (JSONException e) {
 			e.printStackTrace();
 		}
+		final ProgressDialog pdParsing = new ProgressDialog(this);
+		pdParsing.setTitle("Parsing " + filename + "...");
+		pdParsing.setProgressStyle(ProgressDialog.STYLE_HORIZONTAL);
+		pdParsing.setProgress(0);
+		pdParsing.setMax(driveData.length());
+		pdParsing.setCancelable(false);
+		pdParsing.show();
+		Runnable runnable = new Runnable() {
+			@Override
+			public void run() {
+				for (int i = 0; i < driveData.length(); i++) {
+					try {
+						JSONObject c = driveData.getJSONObject(i);
+						Message timeMsg = new Message();
+						timeMsg.obj = c.getString(TAG_TIME);
+						timeHandler.sendMessage(timeMsg);
+						Message gpsMsg = new Message();
+						gpsMsg.obj = c.getString(TAG_GPS_DATA);
+						gpsHandler.sendMessage(gpsMsg);
+						Message accMsg = new Message();
+						accMsg.obj = c.getString(TAG_ACCEL_DATA);
+						accHandler.sendMessage(accMsg);
+						Message speedMsg = new Message();
+						speedMsg.obj = c.getString(TAG_SPEED_DATA);
+						speedHandler.sendMessage(speedMsg);
+						pdParsing.incrementProgressBy(1);
+						if (pdParsing.getProgress()>=pdParsing.getMax()) {
+                              pdParsing.dismiss();
+                        }
+						Thread.sleep(10);
+					} catch (JSONException e) {
+						e.printStackTrace();
+					} catch (InterruptedException e) {
+						e.printStackTrace();
+					}
 
-		try {
-			acceleration = json.getJSONArray(TAG_ACCELERATION);
-
-			for (int i = 0; i < acceleration.length(); i++) {
-				JSONObject c = acceleration.getJSONObject(i);
-
-				String time = c.getString(TAG_TIME);
-				String position = c.getString(TAG_POSITION);
-				String value = c.getString(TAG_VALUE);
-
-				if (i == 0) {
-					tvAcc.setText(time + " | " + position + " | " + value);
-				} else {
-					tvAcc.setText(tvAcc.getText() + "\n" + time + " | "
-							+ position + " | " + value);
 				}
 			}
-		} catch (JSONException e) {
-			e.printStackTrace();
-		}
-
-		try {
-			throttle = json.getJSONArray(TAG_THROTTLE);
-
-			for (int i = 0; i < throttle.length(); i++) {
-				JSONObject c = throttle.getJSONObject(i);
-
-				String time = c.getString(TAG_TIME);
-				String position = c.getString(TAG_POSITION);
-				String value = c.getString(TAG_VALUE);
-
-				if (i == 0) {
-					tvThrottle.setText(time + " | " + position + " | " + value);
-				} else {
-					tvThrottle.setText(tvThrottle.getText() + "\n" + time
-							+ " | " + position + " | " + value);
-				}
-			}
-		} catch (JSONException e) {
-			e.printStackTrace();
-		}
-
-		try {
-			gps = json.getJSONArray(TAG_GPS);
-
-			for (int i = 0; i < gps.length(); i++) {
-				JSONObject c = gps.getJSONObject(i);
-
-				String time = c.getString(TAG_TIME);
-				String value = c.getString(TAG_VALUE);
-
-				if (i == 0) {
-					tvLoc.setText(time + " | " + value);
-				} else {
-					tvLoc.setText(tvLoc.getText() + "\n" + time + " | " + value);
-				}
-			}
-		} catch (JSONException e) {
-			e.printStackTrace();
-		}
-
-		try {
-			ignition = json.getJSONArray(TAG_IGNITION);
-
-			for (int i = 0; i < ignition.length(); i++) {
-				JSONObject c = ignition.getJSONObject(i);
-
-				String time = c.getString(TAG_TIME);
-				String position = c.getString(TAG_POSITION);
-				String value = c.getString(TAG_VALUE);
-				String distance = c.getString(TAG_DISTANCE);
-
-				if (i == 0) {
-					tvIgn.setText(time + " | " + position + " | " + value
-							+ " | " + distance);
-				} else {
-					tvIgn.setText(tvIgn.getText() + "\n" + time + " | "
-							+ position + " | " + value + " | " + distance);
-				}
-			}
-		} catch (JSONException e) {
-			e.printStackTrace();
-		}
+		};
+		new Thread(runnable).start();
 	}
-
 }
